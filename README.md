@@ -5,7 +5,7 @@ This project demonstrates an online learnable classifier system that refines YOL
 ## Features
 
 1.  **Object Detection**: Uses YOLOv8 (nano) to detect persons in uploaded images.
-2.  **Secondary Classifier**: A learnable classifier (ResNet18 features + SGDClassifier) assigns a probability of "Human" vs "False Positive".
+2.  **Secondary Classifier**: A learnable classifier (ResNet18 features + MLPClassifier) assigns a probability of "Human" vs "False Positive".
 3.  **Online Learning**: Users can click on a detection box to mark it as "True Positive" (Human) or "False Positive". The model updates instantly.
 
 ## Setup
@@ -38,5 +38,5 @@ This project demonstrates an online learnable classifier system that refines YOL
 ## Architecture
 
 -   **Backend**: FastAPI
--   **ML**: PyTorch (ResNet18 feature extractor), Scikit-Learn (SGDClassifier), Ultralytics (YOLOv8)
+-   **ML**: PyTorch (ResNet18 feature extractor), PyTroch (MLPClassifier), Ultralytics (YOLOv8)
 -   **Frontend**: HTML5 Canvas + JavaScript
