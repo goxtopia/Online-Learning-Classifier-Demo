@@ -1,0 +1,117 @@
+# --- Python 核心 (编译文件与缓存) ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- C 扩展 ---
+*.so
+
+# --- 分发与打包 (Pip, Setuptools) ---
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- 单元测试与代码覆盖率 ---
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints
+
+# --- 虚拟环境 (Virtual Environments) ---
+# 建议将你的虚拟环境命名为 venv 或 .venv
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- IDE 与编辑器配置 (可选，但推荐) ---
+# JetBrains (Pycharm)
+.idea/
+# VS Code
+.vscode/
+# macOS
+.DS_Store
+
+# --- 日志 (Logs) ---
+*.log
+logs/
+*.log.*
+
+# --- 类型检查 (Type Checking) ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# --- 敏感信息 (非常重要！) ---
+# 永远不要提交包含密钥或密码的环境变量文件
+.env
+.env.local
+.env.*.local
+
+
+# --- Flask 专用 ---
+# Flask 的 instance 文件夹通常存放敏感配置或数据库文件，严禁提交
+instance/
+# Flask-DotEnv 插件常用的环境变量文件
+.flaskenv
+
+# --- FastAPI / Pydantic ---
+# FastAPI 本身产生的垃圾文件很少，主要依赖通用 Python 规则
+# 但如果你使用了 Alembic 进行数据库迁移，有时会产生临时的 pyc 文件
+# (通用规则已包含 pyc，这里只是提醒注意 Alembic 的 .ini 配置如果含密码需小心)
+
+# --- 数据库文件 (开发环境常用) ---
+# 如果你在本地开发使用 SQLite，这些文件绝对不能提交
+*.db
+*.sqlite
+*.sqlite3
+db.sqlite3
+
+# --- 静态文件与用户上传 (非常重要) ---
+# 不要提交用户上传的文件或生成的媒体文件
+# 根据你的项目结构，可能是 uploads, media, 或 static/uploads
+uploads/
+media/
+static/uploads/
+static/cache/
+assets/
+
+# --- 前端构建 (如果你是全栈项目) ---
+# 如果你的 Flask/FastAPI 项目里包含前端 (Vue/React) 代码
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+

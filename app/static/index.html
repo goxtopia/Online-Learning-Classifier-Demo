@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Learnable Classifier Demo</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <div id="alert-area"></div>
+
+    <h1>Online Learnable Human Classifier</h1>
+    <p class="description">
+        Upload an image to detect people using YOLOv8. 
+        Click on any bounding box to train the secondary classifier (True Person vs False Positive).
+    </p>
+
+    <div class="controls">
+        <input type="file" id="fileInput" accept="image/*">
+        <button onclick="uploadImage()">Upload & Analyze</button>
+        <span id="loading">Processing...</span>
+    </div>
+
+    <div id="container">
+        <img id="uploadedImage" src="" alt="Upload an image to start">
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="overlay-backdrop" id="backdrop" onclick="closeFeedback()"></div>
+    <div id="feedback-panel">
+        <h3>Submit Feedback</h3>
+        <p>Current Prediction: <span id="sel-score" style="font-weight:bold;"></span></p>
+        <div class="feedback-actions">
+            <button class="success" onclick="sendFeedback(true)">Confirm Human</button>
+            <button class="danger" onclick="sendFeedback(false)">Mark as False Positive</button>
+        </div>
+        <div style="margin-top: 15px;">
+             <button class="secondary" onclick="closeFeedback()">Cancel</button>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
