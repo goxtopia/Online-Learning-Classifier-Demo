@@ -38,5 +38,5 @@ This project demonstrates an online learnable classifier system that refines YOL
 ## Architecture
 
 -   **Backend**: FastAPI
--   **ML**: PyTorch (ResNet18 feature extractor), PyTroch (MLPClassifier), Ultralytics (YOLOv8)
+-   **ML**: PyTorch (ResNet18 feature extractor), Sklearn (MLPClassifier), Ultralytics (YOLOv8)
 -   **Frontend**: HTML5 Canvas + JavaScript
