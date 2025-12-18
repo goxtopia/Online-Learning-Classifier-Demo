@@ -16,7 +16,16 @@
         Click on any bounding box to train the secondary classifier (True Person vs False Positive).
     </p>
 
-    <div class="controls">
+    <div class="section">
+        <h3>1. Detection Mode</h3>
+        <div class="mode-selector">
+            <label><input type="radio" name="mode" value="mlp" checked onchange="setMode('mlp')"> MLP (Trainable Backend)</label>
+            <label><input type="radio" name="mode" value="clip" onchange="setMode('clip')"> CLIP (Filter by Similarity)</label>
+        </div>
+    </div>
+
+    <div class="section controls">
+        <h3>2. Upload Image</h3>
         <input type="file" id="fileInput" accept="image/*">
         <button onclick="uploadImage()">Upload & Analyze</button>
         <span id="loading">Processing...</span>
@@ -25,6 +34,28 @@
     <div id="container">
         <img id="uploadedImage" src="" alt="Upload an image to start">
         <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="section">
+        <h3>3. Real-time RTSP Monitor</h3>
+        <div class="rtsp-controls">
+            <input type="text" id="rtspUrl" placeholder="RTSP URL (e.g., rtsp://192.168.1.100/stream)" value="rtsp://">
+            <button onclick="startRtsp()">Start Monitor</button>
+            <button onclick="stopRtsp()" class="danger">Stop Monitor</button>
+            <span id="rtsp-status">Status: Idle</span>
+        </div>
+
+        <div id="rtsp-events-container" style="display:none; margin-top: 20px;">
+            <h4>Pending Detections (Click to Label)</h4>
+            <div id="event-list" class="gallery"></div>
+        </div>
+    </div>
+
+    <div class="section" id="history-section">
+        <h3>4. Learning History (CLIP Negatives)</h3>
+        <p>Items marked as "Not Human" in CLIP mode are stored here. Deleting them removes the filter.</p>
+        <button onclick="loadHistory()">Refresh History</button>
+        <div id="history-list" class="gallery"></div>
     </div>
 
     <!-- Feedback Modal -->
