@@ -1,6 +1,8 @@
 let currentDetections = [];
 let currentFilename = "";
 let selectedDetection = null;
+let currentMode = "mlp";
+let rtspInterval = null;
 
 const imgElement = document.getElementById("uploadedImage");
 const canvas = document.getElementById("overlay");
@@ -10,6 +12,11 @@ const backdrop = document.getElementById("backdrop");
 const selScoreSpan = document.getElementById("sel-score");
 const loadingIndicator = document.getElementById("loading");
 const alertArea = document.getElementById("alert-area");
+
+function setMode(mode) {
+    currentMode = mode;
+    console.log("Mode switched to:", currentMode);
+}
 
 function uploadImage() {
     const fileInput = document.getElementById("fileInput");
@@ -21,6 +28,7 @@ function uploadImage() {
     loadingIndicator.style.display = "inline";
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
+    formData.append("mode", currentMode);
 
     // Clear previous state
     currentDetections = [];
@@ -86,16 +94,28 @@ function drawBoxes() {
         const h = sy2 - sy1;
 
         ctx.lineWidth = 3;
-        // Color based on classifier probability
-        const isHuman = det.human_prob > 0.5;
-        // Green for Human, Red for FP
-        ctx.strokeStyle = isHuman ? "#28a745" : "#dc3545";
         
+        let color = "#28a745"; // Default green
+        let text = "";
+
+        if (currentMode === "mlp") {
+             const isHuman = det.human_prob > 0.5;
+             color = isHuman ? "#28a745" : "#dc3545";
+             text = `P: ${(det.human_prob * 100).toFixed(1)}%`;
+        } else {
+            // CLIP Mode
+            // In CLIP mode, we only show things that PASSED the filter (so they are presumed human)
+            // Or if we show everything, we should indicate status.
+            // Based on backend logic: if it's returned, it passed the filter.
+            color = "#28a745";
+            text = "Human (CLIP)";
+        }
+
+        ctx.strokeStyle = color;
         ctx.strokeRect(sx1, sy1, w, h);
 
         // Draw label background
-        ctx.fillStyle = isHuman ? "#28a745" : "#dc3545";
-        const text = `P: ${(det.human_prob * 100).toFixed(1)}%`;
+        ctx.fillStyle = color;
         const textWidth = ctx.measureText(text).width;
         ctx.fillRect(sx1, sy1 - 20, textWidth + 10, 20);
 
@@ -141,7 +161,11 @@ canvas.addEventListener("click", (e) => {
 function openFeedback(det) {
     feedbackPanel.style.display = "block";
     backdrop.style.display = "block";
-    selScoreSpan.innerText = `${(det.human_prob * 100).toFixed(1)}% Human`;
+    if (currentMode === "mlp") {
+        selScoreSpan.innerText = `${(det.human_prob * 100).toFixed(1)}% Human`;
+    } else {
+        selScoreSpan.innerText = "Presumed Human (CLIP)";
+    }
     
     // Highlight selected
     drawBoxes();
@@ -168,17 +192,147 @@ function sendFeedback(isHuman) {
         body: JSON.stringify({
             filename: currentFilename,
             bbox: selectedDetection.bbox,
-            is_human: isHuman
+            is_human: isHuman,
+            mode: currentMode
         })
     })
     .then(res => res.json())
     .then(data => {
-        showAlert("Model updated! Upload image again to see changes.");
+        showAlert("Feedback recorded!");
         closeFeedback();
+        if (currentMode === "clip") {
+            loadHistory(); // Refresh history if we added a negative
+        }
     })
     .catch(err => {
         console.error(err);
         showAlert("Error sending feedback");
+    });
+}
+
+// --- RTSP Functions ---
+
+function startRtsp() {
+    const url = document.getElementById("rtspUrl").value;
+    if (!url) {
+        showAlert("Please enter an RTSP URL");
+        return;
+    }
+
+    fetch("/rtsp/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showAlert("RTSP Monitor Started");
+        document.getElementById("rtsp-status").innerText = "Status: Running";
+        document.getElementById("rtsp-events-container").style.display = "block";
+        if (rtspInterval) clearInterval(rtspInterval);
+        rtspInterval = setInterval(pollRtspEvents, 2000); // Poll every 2s
+    })
+    .catch(err => showAlert("Error starting RTSP"));
+}
+
+function stopRtsp() {
+    fetch("/rtsp/stop", { method: "POST" })
+    .then(res => res.json())
+    .then(data => {
+        showAlert("RTSP Monitor Stopped");
+        document.getElementById("rtsp-status").innerText = "Status: Stopped";
+        if (rtspInterval) clearInterval(rtspInterval);
+    })
+    .catch(err => showAlert("Error stopping RTSP"));
+}
+
+function pollRtspEvents() {
+    fetch("/rtsp/events")
+    .then(res => res.json())
+    .then(events => {
+        const container = document.getElementById("event-list");
+        container.innerHTML = "";
+        events.forEach(evt => {
+            const div = document.createElement("div");
+            div.className = "gallery-item";
+
+            const img = document.createElement("img");
+            img.src = evt.image_url;
+            div.appendChild(img);
+
+            const btnGroup = document.createElement("div");
+
+            const btnYes = document.createElement("button");
+            btnYes.innerText = "Human";
+            btnYes.className = "success small";
+            btnYes.onclick = () => labelRtspEvent(evt.id, true);
+
+            const btnNo = document.createElement("button");
+            btnNo.innerText = "Not Human";
+            btnNo.className = "danger small";
+            btnNo.onclick = () => labelRtspEvent(evt.id, false);
+
+            btnGroup.appendChild(btnYes);
+            btnGroup.appendChild(btnNo);
+            div.appendChild(btnGroup);
+
+            container.appendChild(div);
+        });
+    });
+}
+
+function labelRtspEvent(eventId, isHuman) {
+    fetch("/rtsp/label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, is_human: isHuman })
+    })
+    .then(res => res.json())
+    .then(data => {
+        pollRtspEvents(); // Refresh list
+    });
+}
+
+// --- History Functions ---
+
+function loadHistory() {
+    fetch("/history")
+    .then(res => res.json())
+    .then(items => {
+        const container = document.getElementById("history-list");
+        container.innerHTML = "";
+        if (items.length === 0) {
+            container.innerHTML = "<p>No negative samples in CLIP history.</p>";
+            return;
+        }
+        items.forEach(item => {
+            const div = document.createElement("div");
+            div.className = "gallery-item";
+
+            // Assuming item has image_url or we reconstruct it.
+            // Ideally backend returns a crop URL or we use the original with css crop.
+            // Simpler: Backend saves crop for history display.
+
+            const img = document.createElement("img");
+            img.src = item.image_url || "/static/blank.jpg"; // Fallback
+            div.appendChild(img);
+
+            const btnDelete = document.createElement("button");
+            btnDelete.innerText = "Delete";
+            btnDelete.className = "danger small";
+            btnDelete.onclick = () => deleteHistoryItem(item.id);
+
+            div.appendChild(btnDelete);
+            container.appendChild(div);
+        });
+    });
+}
+
+function deleteHistoryItem(itemId) {
+    fetch(`/history/${itemId}`, { method: "DELETE" })
+    .then(res => res.json())
+    .then(data => {
+        loadHistory();
     });
 }
 
