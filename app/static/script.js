@@ -36,6 +36,10 @@ function uploadImage() {
     // Hide image until loaded
     imgElement.style.opacity = 0.5;
 
+    // Clear raw detections
+    document.getElementById("raw-yolo-section").style.display = "none";
+    document.getElementById("raw-detections-list").innerHTML = "";
+
     fetch("/upload", {
         method: "POST",
         body: formData
@@ -53,6 +57,7 @@ function uploadImage() {
         imgElement.onload = () => {
             resizeCanvas();
             drawBoxes();
+            renderRawDetections(data.detections);
             loadingIndicator.style.display = "none";
             
             if (currentDetections.length === 0) {
@@ -85,6 +90,9 @@ function drawBoxes() {
     const scale = getScaleFactors();
 
     currentDetections.forEach(det => {
+        // Filter out items that are strictly "filtered" by backend logic for the main view
+        if (det.status === "filtered_clip") return;
+
         const [x1, y1, x2, y2] = det.bbox;
         const sx1 = x1 * scale.x;
         const sy1 = y1 * scale.y;
@@ -103,10 +111,7 @@ function drawBoxes() {
              color = isHuman ? "#28a745" : "#dc3545";
              text = `P: ${(det.human_prob * 100).toFixed(1)}%`;
         } else {
-            // CLIP Mode
-            // In CLIP mode, we only show things that PASSED the filter (so they are presumed human)
-            // Or if we show everything, we should indicate status.
-            // Based on backend logic: if it's returned, it passed the filter.
+            // CLIP Mode (Accepted items)
             color = "#28a745";
             text = "Human (CLIP)";
         }
@@ -126,20 +131,79 @@ function drawBoxes() {
     });
 }
 
+function renderRawDetections(detections) {
+    const section = document.getElementById("raw-yolo-section");
+    const container = document.getElementById("raw-detections-list");
+    section.style.display = "block";
+    container.innerHTML = "";
+
+    if (detections.length === 0) {
+        container.innerHTML = "<p>No detections found.</p>";
+        return;
+    }
+
+    // We need to crop from the original image to show them here.
+    // Since we don't have separate crop URLs for every detection from backend (only for RTSP/History),
+    // we can draw them onto small canvases.
+    const scale = getScaleFactors();
+
+    detections.forEach((det, index) => {
+        const div = document.createElement("div");
+        div.className = "gallery-item";
+
+        // Canvas for crop
+        const cropCanvas = document.createElement("canvas");
+        cropCanvas.width = 100;
+        cropCanvas.height = 100;
+        const ctxCrop = cropCanvas.getContext("2d");
+
+        // Draw crop
+        // det.bbox is in original coordinates
+        const [x1, y1, x2, y2] = det.bbox;
+        const w = x2 - x1;
+        const h = y2 - y1;
+
+        // Draw the specific region from the source image to the small canvas
+        // imgElement might be scaled in DOM, but we use natural dimensions for source
+        ctxCrop.drawImage(imgElement, x1, y1, w, h, 0, 0, 100, 100);
+
+        div.appendChild(cropCanvas);
+
+        // Info
+        const info = document.createElement("div");
+        info.style.fontSize = "12px";
+        info.innerHTML = `
+            <b>Status:</b> ${det.status}<br>
+            <b>YOLO Conf:</b> ${(det.yolo_conf * 100).toFixed(1)}%<br>
+            <b>Human Prob:</b> ${(det.human_prob * 100).toFixed(1)}%
+        `;
+        div.appendChild(info);
+
+        // Highlight logic
+        if (det.status === "filtered_clip") {
+            div.style.border = "2px solid #dc3545"; // Red for filtered
+            div.style.backgroundColor = "#fff5f5";
+        } else {
+             div.style.border = "2px solid #28a745"; // Green for accepted
+        }
+
+        container.appendChild(div);
+    });
+}
+
 canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    // Check which box was clicked
     const scale = getScaleFactors();
     
     selectedDetection = null;
-    // Iterate backwards to select top-most
     for (let i = currentDetections.length - 1; i >= 0; i--) {
         const det = currentDetections[i];
+        if (det.status === "filtered_clip") continue; // Can't select filtered ones on main view
+
         const [bx1, by1, bx2, by2] = det.bbox;
-        
         const sx1 = bx1 * scale.x;
         const sy1 = by1 * scale.y;
         const sx2 = bx2 * scale.x;
