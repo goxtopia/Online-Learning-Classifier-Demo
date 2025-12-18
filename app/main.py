@@ -147,6 +147,20 @@ clip_store = CLIPNegativeStore()
 
 # --- RTSP Monitor ---
 
+def compute_iou(box1, box2):
+    # box: [x1, y1, x2, y2]
+    xA = max(box1[0], box2[0])
+    yA = max(box1[1], box2[1])
+    xB = min(box1[2], box2[2])
+    yB = min(box1[3], box2[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    box1Area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    box2Area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+    iou = interArea / float(box1Area + box2Area - interArea + 1e-6)
+    return iou
+
 class RtspMonitor:
     def __init__(self):
         self.running = False
@@ -154,6 +168,10 @@ class RtspMonitor:
         self.url = ""
         self.events = [] # List of pending events {id, image_path, image_url, bbox}
         self.lock = threading.Lock()
+
+        # Cool-down tracking
+        # List of {"bbox": [x1,y1,x2,y2], "timestamp": t}
+        self.recent_detections = []
 
     def start(self, url):
         if self.running:
@@ -173,22 +191,52 @@ class RtspMonitor:
 
     def loop(self):
         cap = cv2.VideoCapture(self.url)
+
+        # Motion Detection Setup
+        fgbg = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+        last_frame = None
+
         while self.running:
             ret, frame = cap.read()
             if not ret:
-                time.sleep(1) # Wait before retry or if stream ended
-                # Attempt reconnect? For now just sleep
+                time.sleep(1)
                 continue
 
-            # Run YOLO on frame
-            # Use small confidence to detect potential humans
+            # 1. Motion Detection Check (Optimization)
+            # Use small resize for speed
+            small_frame = cv2.resize(frame, (640, 480))
+            fgmask = fgbg.apply(small_frame)
+            motion_ratio = np.count_nonzero(fgmask) / (small_frame.shape[0] * small_frame.shape[1])
+
+            # If motion is very low, skip YOLO
+            if motion_ratio < 0.01:
+                time.sleep(0.1)
+                continue
+
+            # 2. Cleanup old cool-down records
+            now = time.time()
+            self.recent_detections = [d for d in self.recent_detections if now - d["timestamp"] < 5.0]
+
+            # 3. Run YOLO
             results = yolo_model(frame, verbose=False)
 
             for r in results:
                 for box in r.boxes:
                     if int(box.cls[0]) == 0: # Person
-                        # Crop and save
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        current_box = [x1, y1, x2, y2]
+
+                        # Check cool-down
+                        is_cooled_down = False
+                        for prev in self.recent_detections:
+                            if compute_iou(current_box, prev["bbox"]) > 0.3: # Threshold 0.3 IoU
+                                is_cooled_down = True
+                                break
+
+                        if is_cooled_down:
+                            continue
+
+                        # If passed cool-down, process it
                         h, w, _ = frame.shape
                         x1, y1 = max(0, x1), max(0, y1)
                         x2, y2 = min(w, x2), min(h, y2)
@@ -207,13 +255,17 @@ class RtspMonitor:
                                     "id": event_id,
                                     "image_path": filepath,
                                     "image_url": f"/uploads/{filename}",
-                                    "timestamp": time.time()
+                                    "timestamp": now
                                 })
-                                # Keep list manageable
                                 if len(self.events) > 50:
                                     self.events.pop(0)
 
-            # Simple frame rate limiter
+                            # Add to recent detections
+                            self.recent_detections.append({
+                                "bbox": current_box,
+                                "timestamp": now
+                            })
+
             time.sleep(0.5)
         cap.release()
 

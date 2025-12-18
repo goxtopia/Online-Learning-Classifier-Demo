@@ -167,11 +167,16 @@ canvas#overlay {
     gap: 5px;
     align-items: center;
     background: #fff;
+    /* Allow item to grow slightly if needed */
+    max-width: 200px;
 }
 
 .gallery-item img {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
+    /* Changed from fixed size + cover to flexible size to show full body */
+    max-width: 100%;
+    max-height: 200px;
+    height: auto;
+    width: auto;
+    display: block;
     border-radius: 4px;
 }
