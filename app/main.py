@@ -114,6 +114,16 @@ class CLIPNegativeStore:
         logger.info(f"Added negative sample to CLIP store. Count: {len(self.negatives)}")
 
     def delete(self, item_id: str):
+        # Find item to get path
+        item = next((i for i in self.negatives if i["id"] == item_id), None)
+        if item:
+            # Reconstruct filepath from url
+            # url is /uploads/filename.jpg
+            filename = os.path.basename(item["image_url"])
+            filepath = os.path.join("app/uploads", filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
         self.negatives = [item for item in self.negatives if item["id"] != item_id]
 
     def get_all(self):
@@ -194,12 +204,21 @@ class RtspMonitor:
 
         # Motion Detection Setup
         fgbg = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
-        last_frame = None
 
         while self.running:
+            if not cap.isOpened():
+                logger.warning("RTSP stream not open. Reconnecting in 5s...")
+                time.sleep(5)
+                cap = cv2.VideoCapture(self.url)
+                continue
+
             ret, frame = cap.read()
             if not ret:
+                logger.warning("Failed to read frame. Reconnecting in 1s...")
+                cap.release()
                 time.sleep(1)
+                # Re-init on next loop iteration check
+                cap = cv2.VideoCapture(self.url)
                 continue
 
             # 1. Motion Detection Check (Optimization)
@@ -210,7 +229,7 @@ class RtspMonitor:
 
             # If motion is very low, skip YOLO
             if motion_ratio < 0.01:
-                time.sleep(0.1)
+                # We do not sleep here to avoid buffer lag, just continue to next frame read
                 continue
 
             # 2. Cleanup old cool-down records
@@ -266,7 +285,9 @@ class RtspMonitor:
                                 "timestamp": now
                             })
 
-            time.sleep(0.5)
+            # Removed explicit sleep to avoid buffer lag.
+            # Processing time of YOLO is usually enough to regulate flow.
+            # If strictly needed, check time.time() difference.
         cap.release()
 
     def get_events(self):
