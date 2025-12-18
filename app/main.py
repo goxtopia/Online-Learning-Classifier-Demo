@@ -325,28 +325,29 @@ async def upload_image(file: UploadFile = File(...), mode: str = Form("mlp")):
                     crop = original_img.crop((x1, y1, x2, y2))
                     
                     human_prob = 1.0 # Default if passed filtering
+                    status = "accepted"
 
                     if mode == "clip":
                         # Extract CLIP feature
                         clip_emb = get_clip_embedding(crop)
                         # Filter
                         if clip_store.is_similar(clip_emb, threshold=0.98):
-                            # It's similar to a known negative, so SKIP it
-                            continue
-                        # If passed, we return it.
-                        # human_prob isn't really calculated here, just assume it's human (1.0)
-                        human_prob = 1.0
+                            status = "filtered_clip"
+                        else:
+                            human_prob = 1.0
 
                     else:
                         # MLP Mode
                         embedding = get_resnet_embedding(crop)
                         human_prob = clf.predict_proba(embedding)[0][1]
+                        status = "processed_mlp"
                     
                     detections.append({
                         "id": str(uuid.uuid4()),
                         "bbox": [x1, y1, x2, y2],
                         "yolo_conf": conf,
-                        "human_prob": float(human_prob)
+                        "human_prob": float(human_prob),
+                        "status": status
                     })
     
     return JSONResponse({
