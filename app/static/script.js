@@ -322,7 +322,7 @@ function startRtsp() {
     fetch("/rtsp/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url })
+        body: JSON.stringify({ url: url, mode: currentMode })
     })
     .then(res => res.json())
     .then(data => {
@@ -359,6 +359,45 @@ function pollRtspEvents() {
             const img = document.createElement("img");
             img.src = evt.image_url;
             div.appendChild(img);
+
+            // Highlight logic
+            let isRejected = false;
+            let badgeText = "Pending";
+
+            if (evt.status === "filtered_clip") {
+                isRejected = true;
+                badgeText = "CLIP Filtered";
+            } else if (evt.status === "processed_mlp") {
+                 // Assuming MLP logic sets this if prob < 0.5
+                 isRejected = true;
+                 badgeText = "MLP Rejected";
+            }
+
+            if (isRejected) {
+                div.style.border = "3px solid #dc3545";
+                div.style.backgroundColor = "#fff5f5";
+                div.style.opacity = "0.8";
+            } else {
+                 div.style.border = "1px solid #ddd";
+                 div.style.backgroundColor = "#fff";
+            }
+
+            // Badge
+            if (evt.status && evt.status !== "accepted") {
+                const badge = document.createElement("span");
+                badge.innerText = badgeText;
+                badge.style.position = "absolute";
+                badge.style.top = "5px";
+                badge.style.left = "5px";
+                badge.style.padding = "2px 5px";
+                badge.style.borderRadius = "4px";
+                badge.style.fontSize = "10px";
+                badge.style.color = "white";
+                badge.style.fontWeight = "bold";
+                badge.style.backgroundColor = isRejected ? "#dc3545" : "#28a745";
+                div.style.position = "relative";
+                div.appendChild(badge);
+            }
 
             const btnGroup = document.createElement("div");
 

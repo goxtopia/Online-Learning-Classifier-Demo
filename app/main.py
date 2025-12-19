@@ -176,6 +176,7 @@ class RtspMonitor:
         self.running = False
         self.thread = None
         self.url = ""
+        self.mode = "mlp"
         self.events = [] # List of pending events {id, image_path, image_url, bbox}
         self.lock = threading.Lock()
 
@@ -183,14 +184,15 @@ class RtspMonitor:
         # List of {"bbox": [x1,y1,x2,y2], "timestamp": t}
         self.recent_detections = []
 
-    def start(self, url):
+    def start(self, url, mode="mlp"):
         if self.running:
             self.stop()
         self.url = url
+        self.mode = mode
         self.running = True
         self.thread = threading.Thread(target=self.loop, daemon=True)
         self.thread.start()
-        logger.info(f"RTSP Monitor started for {url}")
+        logger.info(f"RTSP Monitor started for {url} with mode {mode}")
 
     def stop(self):
         self.running = False
@@ -263,6 +265,25 @@ class RtspMonitor:
                         if x2 > x1 and y2 > y1:
                             crop = frame[y1:y2, x1:x2]
 
+                            # Convert BGR to RGB for PIL
+                            crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                            pil_crop = Image.fromarray(crop_rgb)
+
+                            status = "accepted"
+                            human_prob = 1.0
+
+                            if self.mode == "clip":
+                                clip_emb = get_clip_embedding(pil_crop)
+                                if clip_store.is_similar(clip_emb, threshold=0.98):
+                                    status = "filtered_clip"
+                            else:
+                                # MLP Mode
+                                embedding = get_resnet_embedding(pil_crop)
+                                prob = clf.predict_proba(embedding)[0][1]
+                                human_prob = float(prob)
+                                if prob < 0.5:
+                                    status = "processed_mlp"
+
                             # Save crop
                             event_id = str(uuid.uuid4())
                             filename = f"rtsp_{event_id}.jpg"
@@ -274,7 +295,9 @@ class RtspMonitor:
                                     "id": event_id,
                                     "image_path": filepath,
                                     "image_url": f"/uploads/{filename}",
-                                    "timestamp": now
+                                    "timestamp": now,
+                                    "status": status,
+                                    "human_prob": human_prob
                                 })
                                 if len(self.events) > 50:
                                     self.events.pop(0)
@@ -440,10 +463,11 @@ async def delete_history_item(item_id: str):
 
 class RtspUrl(BaseModel):
     url: str
+    mode: str = "mlp"
 
 @app.post("/rtsp/start")
 async def start_rtsp(data: RtspUrl):
-    rtsp_monitor.start(data.url)
+    rtsp_monitor.start(data.url, mode=data.mode)
     return {"status": "started"}
 
 @app.post("/rtsp/stop")
