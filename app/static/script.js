@@ -180,12 +180,48 @@ function renderRawDetections(detections) {
         div.appendChild(info);
 
         // Highlight logic
+        let isRejected = false;
+        let badgeText = "Accepted";
+
         if (det.status === "filtered_clip") {
-            div.style.border = "2px solid #dc3545"; // Red for filtered
-            div.style.backgroundColor = "#fff5f5";
+            isRejected = true;
+            badgeText = "CLIP Filtered";
+        } else if (det.status === "processed_mlp") {
+             if (det.human_prob < 0.5) {
+                 isRejected = true;
+                 badgeText = "MLP Rejected";
+             } else {
+                 badgeText = "MLP Accepted";
+             }
         } else {
-             div.style.border = "2px solid #28a745"; // Green for accepted
+             // accepted or other
+             badgeText = "Accepted";
         }
+
+        if (isRejected) {
+            div.style.border = "3px solid #dc3545"; // Red for filtered
+            div.style.backgroundColor = "#fff5f5";
+            div.style.opacity = "0.7";
+        } else {
+             div.style.border = "3px solid #28a745"; // Green for accepted
+             div.style.backgroundColor = "#f0fff4";
+        }
+
+        // Add badge
+        const badge = document.createElement("span");
+        badge.innerText = badgeText;
+        badge.style.position = "absolute";
+        badge.style.top = "5px";
+        badge.style.left = "5px";
+        badge.style.padding = "2px 5px";
+        badge.style.borderRadius = "4px";
+        badge.style.fontSize = "10px";
+        badge.style.color = "white";
+        badge.style.fontWeight = "bold";
+        badge.style.backgroundColor = isRejected ? "#dc3545" : "#28a745";
+
+        div.style.position = "relative";
+        div.appendChild(badge);
 
         container.appendChild(div);
     });
